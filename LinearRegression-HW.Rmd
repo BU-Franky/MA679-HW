@@ -1,0 +1,429 @@
+---
+title: "LinearRegression-HW"
+author: "Franky Zhang"
+date: "1/25/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(MASS)
+library(ISLR2)
+```
+
+```{r echo=FALSE, include=FALSE}
+head(Boston)
+lm.fit <- lm(medv~lstat, data = Boston)
+lm.fit
+names(lm.fit)
+coef(lm.fit)
+confint(lm.fit)
+predict(lm.fit, data.frame(lstat = c(5, 10, 15)))
+predict(lm.fit, data.frame(lstat = c(5, 10, 15)), interval = "prediction") # predict with confidence interval 
+
+lm.fit <- lm(medv~., data = Boston)
+summary(lm.fit)
+summary(lm.fit)$r.sq # R Square
+summary(lm.fit)$sigma # RSE: relative standard error
+library(car)
+vif(lm.fit) # vif>5 indicates high multicollinearity
+```
+
+## 3.1
+Describe the null hypotheses to which the p-values given in Table 3.4 correspond. Explain what conclusions you can draw based on these p-values. Your explanation should be phrased in terms of sales, TV, radio, and newspaper, rather than in terms of the coefficients of the linear model.
+
+#### _Answer_: 
+1)TV: 
+null hypothesis: TV is not related with sales. 
+since p-value of TV is smaller than .0001, we can successfully reject null hypothesis and TV is related to sales under this multiple linear regression model. 
+
+2)radio: 
+null hypothesis: radio is not related with sales. 
+since p-value of radio is smaller than .0001, we can successfully reject null hypothesis and radio is related to sales under this multiple linear regression model. 
+
+3)newspaper: 
+null hypothesis: newspaper is not related with sales. 
+while p0-vlaue of newspaper is .86, it means there is a prob of 86% that the data exists under null hypothesis. hence, we fail to reject null hypothesis, and we are not sure whether newspaper is related to sales. 
+
+## 3.2
+Carefully explain the differences between the KNN classifier and KNN regression methods.
+
+#### _Answer_: 
+KNN classifier attempts to predict the class to which the output variable belong by computing the local probability. KNN regression gives prediction of output variable by using local average. 
+
+## 3.5
+Consider the fitted values that result from performing linear regression without an intercept. In this setting, the ith fitted value takes the form $$ \hat{y_i}=x_i \hat{\beta},$$ where $$ \hat{\beta} = (\sum_{i = 1}^n x_i y_i)/(\sum_{i' = 0}^n x_{i'}^2)$$ Show that we can write $$ \hat{y_i} = \sum_{i' = 1}^n a_{i'} y_{i'}.$$ what is $a_{i'}$. 
+
+Note: We interpret this result by saying that the fitted values from linear regression are linear combinations of the response values.
+
+#### _Answer_: 
+
+take $\hat{\beta} = (\sum_{i = 1}^n x_i y_i)/(\sum_{i = 1}^n x_{i'}^2)$ in to $\hat{y_i} = x_i\cdot\beta$: 
+$$\hat{y_I} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i' = 1}^n x_{i'}^2}\cdot x_I$$
+$$={\sum_{i = 1}^n (\frac{x_i}{\sum_{i' = 1}^n x_{i'}^2} y_i}\cdot x_I)$$
+thus, $$\hat{y_i}={\sum_{i' = 1}^n (\frac{x_i'}{(\sum_{i'' = 1}^n x_{i''}^2)} y_i'}\cdot x_i)$$
+hence, $a_{i'}$ here is $$ \frac{x_i'}{(\sum_{i'' = 1}^n x_{i''}^2)} \cdot x_i$$
+
+## 3.6
+Using (3.4), argue that in the case of simple linear regression, the least squares line always passe through the point $(\bar{x}, \bar{y})$ 
+
+#### _Answer_: 
+the number of observation points is $n$, $\hat{\beta_0}$ and $\hat{\beta_1}$ are estimated coefficients by LSE method. let the regression model be: 
+$$ y_i = \hat{\beta_0} + \hat{\beta_1} \times x_i + \epsilon _ i $$
+sum them up: 
+$$ \sum_{i = 1}^n y_i = n \times \hat{\beta_0} + \hat{\beta_1} \times \sum_{i = 1}^n x_i + \sum_{i = 1}^n \epsilon_i$$
+$$ \sum_{i = 1}^n y_i = n \times \hat{\beta_0} + \hat{\beta_1} \times \sum_{i = 1}^n x_i$$
+then take average: 
+$$ \bar{y} = \hat{\beta_0} + \hat{\beta_1} \times \bar{x}$$
+and this exactly prove $(\bar{x}, \bar{y}$ is on the least square line. 
+
+\newpage
+
+## 3.11
+
+In this problem we will investigate the t-statistic for the null hypoth- esis H0 : $\beta$ = 0 in simple linear regression without an intercept. To begin, we generate a predictor x and a response y as follows.
+
+set.seed(1)
+
+x <- rnorm(100)
+
+y <- 2 * x + rnorm(100)
+
+### (a)
+
+#### _Answer_:
+
+```{r echo=FALSE, include=FALSE}
+set.seed(1)
+number <- 100
+x <- rnorm(number)
+y <- 2 * x + rnorm(number)
+```
+
+```{r echo=FALSE}
+lm.fit1 <- lm(y~x+0)
+summary(lm.fit1)
+```
+
+Comment: the estimated value $\hat{\beta}$ is 1.99 and _p_value_ here is <2e-16, based on which we can reject Null hypothesis: $\beta = 0.$
+
+### (b)
+
+#### _Answer_: 
+
+```{r echo=FALSE}
+lm.fit2 <- lm(x~y+0)
+summary(lm.fit2)
+```
+
+Comment: the estimated value $\hat{\beta}$ is 0.39 and _p_value_ here is <2e-16, based on which we can reject Null hypothesis: $\beta = 0.$
+
+
+### (c)
+
+#### _Answer_: 
+$$(\sum_{i = 1}^n x_i^2) \cdot \hat{\beta_x} = (\sum_{i = 1}^n y_i^2) \cdot \hat{\beta_y}$$
+
+
+### (d)
+
+#### _Answer_: 
+
+Already know that $$SE(\hat{\beta}) = \sqrt{\frac{\sum_{i = 1}^n (y_i - x_i \hat{\beta})^2}{(n - 1) \sum_{i' = 1}^n x_{i'}^2}}. $$
+
+the estimation of $\beta$ is: $$\hat{\beta} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n x_i^2}$$
+
+take it in to $SE(\hat(\beta))$, and simplify it to: 
+$$ SE(\hat{\beta}) = \sqrt{\frac{\sum_{i = 1}^n y_i^2 - \frac{(\sum_{i =1}^n x_i y_i)^2}{\sum_{i = 1}^n x_i^2}}{(n - 1) \sum_{i' = 1}^n x_{i'}^2}}$$
+then, 
+$$ \frac{\hat{\beta}}{SE(\hat{\beta})} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n x_i^2} \times \sqrt{\frac{(n - 1) \sum_{i' = 1}^n x_{i'}^2}{\sum_{i = 1}^n y_i^2 - \frac{(\sum_{i =1}^n x_i y_i)^2}{\sum_{i = 1}^n x_i^2}}}$$ 
+$$ = \frac{(\sqrt{n-1}) \sum_{i = 1}^n x_i y_i}{\sqrt{(\sum_{i = 1}^n x_i^2)(\sum_{i = 1}^n y_i^2) - (\sum_{i = 1}^n x_i y_i)^2}}$$
+Algebraical proving is done. Then comes the numerically prove: 
+```{r}
+t_stat1 <- (sqrt(number - 1)*sum(x*y))/
+  (sqrt(sum(x^2) * sum(y^2) - (sum(x*y))^2))
+cat("t-statistic of lm.fit1 is", t_stat1)
+```
+
+### (e)
+
+#### _Answer_: 
+
+the algebraical forms of _t-statistic_ for y onto x and x onto y are both $$\frac{(\sqrt{n-1}) \sum_{i = 1}^n x_i y_i}{\sqrt{(\sum_{i = 1}^n x_i^2)(\sum_{i = 1}^n y_i^2) - (\sum_{i = 1}^n x_i y_i)^2}}$$
+and the _t-statistic_ of lm.fit1 and lm.fit2 are quite the same: 18.73
+
+### (f)
+
+#### _Answaer_: 
+
+```{r echo=FALSE}
+lm.fit3 <- lm(y~x)
+summary(lm.fit3)
+```
+
+the result shows their _t-statitic_ are not exactly the same. 
+
+\newpage
+
+## 3.12
+This problem involves simple linear regression without an intercept.
+
+### (a)
+
+#### _Answer_:
+
+the coefficient estimate for the regression of X onto Y the same as the coefficient estimate for the regression of Y onto X means: 
+$$\hat{\beta_x} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n x_i^2}, \hat{\beta_y} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n y_i^2}, and \beta_x = \beta_y$$
+$$ \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n x_i^2} = \frac{\sum_{i = 1}^n x_i y_i}{\sum_{i = 1}^n y_i^2}$$
+thus, $\sum_{i = 1}^n x_i^2 = \sum_{i = 1}^n y_i^2$, and their coefficients are the same as long as sum of x square equal to y square. 
+
+### (b)
+
+```{r}
+number <- 100
+x <- rnorm(number)
+y <- 2*x + rnorm(number)
+fit1 <- lm(y~x+0)
+summary(fit1)$coef
+fit2 <- lm(x~y+0)
+summary(fit2)$coef
+```
+
+### (c)
+
+```{r}
+x <- rnorm(number) + 1
+y <- c()
+for (i in 1:number) {
+  y[i] <- x[number + 1 -i]
+}
+fit3 <- lm(y~x+0)
+summary(fit3)$coef
+fit4 <- lm(x~y+0)
+summary(fit4)$coef
+```
+
+
+## 3.13
+
+### (a)
+
+```{r}
+set.seed(1)
+number <- 100
+x <- rnorm(number, mean = 0, sd = 1)
+```
+
+
+### (b)
+
+```{r}
+set.seed(2)
+eps <- rnorm(number, mean = 0, sd = .5) # sqrt(variance) = sd
+```
+
+
+### (c)
+
+```{r}
+y <- -1 + 0.5*x + eps
+```
+
+####  _Answer_:
+
+the length of vector _y_ is 100, the values of $\beta_0$ and $\beta_1$ are -1 and 0.5 in this model
+
+### (d)
+
+```{r}
+library(ggplot2)
+ggplot(mapping = aes(x = x, y = y)) + 
+  geom_point()
+```
+#### _Answer_: 
+the relationship between _x_ and _y_ are roughly linear, which mean as the value of _x_ goes up the value of _y_ increases. 
+
+### (e)
+
+```{r}
+fit.lse <- lm(y~x)
+summary(fit.lse)
+```
+
+$\hat{\beta_0}$ and $\hat{\beta_1}$ are -1.00 and 0.40, compare with $\beta_0 = 1$, $\beta_1 = .5$, the result is really close, but still with some irreducible error. 
+
+### (f)
+
+```{r}
+ggplot(mapping = aes(x = x, y = y)) + 
+  geom_point() + 
+  geom_abline(intercept = -1.00454, slope = 0.40072, color = "tomato1" , lwd = .8) 
+```
+
+### (g)
+
+```{r}
+x2 <- x*x
+fit.poly <- lm(y~x+x2)
+summary(fit.poly)
+```
+
+#### _Answer_: 
+
+the R-squared and adjust R-square are improved a little but not big enough to prove that the model fit is better. 
+
+### (h)
+
+```{r}
+set.seed(3)
+eps <- rnorm(number, mean = 0, sd = 0.1)
+y <- -1 + 0.5*x + eps
+fit.less <- lm(y~x)
+summary(fit.less)
+```
+
+Here, the estimation of intercept and slope is nearly the exact value of $\beta_0$ and $\beta_1$. Additionally, the R-squared value increase from 0.28 to 0.96, which indicate that under this model, 96% of data variation can be explained. 
+
+### (i)
+
+```{r}
+set.seed(4)
+eps <- rnorm(number, mean = 0, sd = 1)
+y <- -1 + 0.5*x + eps
+fit.more <- lm(y~x)
+summary(fit.more)
+```
+
+#### _Answer_:
+the estimation of intercept and slope are acceptable, but the R-square is down to only 0.11, which means this model can only explain only 11% information of the data. 
+
+### (j)
+
+```{r}
+cat("95% confidence interval of original data set \n")
+confint(fit.lse)
+cat("\n")
+cat("95% confidence interval of less noiser data set \n")
+confint(fit.less)
+cat("\n")
+cat("95% confidence interval of more noiser data set \n")
+confint(fit.more)
+```
+
+#### _Answer_: 
+
+As the extent of noise grows up, the confidence interval of both intercept and slope grows up, indicating the more uncertainty of the model. But the centers of intervals are still close to the true value. 
+
+\newpage
+
+## 3.14
+
+This problem focuses on the _collinearity_ problem.
+
+### (a)
+
+```{r echo=FALSE, include=FALSE}
+set.seed(10)
+x1 <- runif(100)
+x2 <- 0.5 * x1 + rnorm(100) / 10
+y <- 2 + 2 * x1 + 0.3 * x2 + rnorm(100)
+```
+
+#### _Answer_: 
+the form of linear model is $$y_i = 2+ 2\times x_{1i} + 0.3\times x_{2i} + \epsilon_i$$
+the regression coefficients $\beta_0 = 2$, $\beta_1 = 2$, $\beta_2 = 0.3$.
+
+### (b)
+
+```{r}
+ggplot(mapping = aes(x = x1, y = x2)) +
+  geom_point()
+```
+
+#### _Answer_: 
+According to the plot, the relationship between $x_1$ and $x_2$ is linear. 
+
+\newpage
+
+### (c)
+
+```{r}
+fit.lse <- lm(y~x1+x2)
+summary(fit.lse)
+```
+
+#### _Answer_:
+
+According to the regression result, $\hat{\beta_0}$, $\hat{\beta_1}$ and $\hat{\beta_2}$ are 1.77, 3.16 and -1.83, which are really far away differernt from true value. By p-value of the model, we can successfully reject _Null Hypothesis_ $H_0:\beta_1 = 0$ but fail to reject $H_0:\beta_2 = 0$.
+
+### (d)
+
+```{r}
+fit.1 <- lm(y~x1)
+summary(fit.1)
+```
+
+#### _Answer_: 
+
+_Null Hypothesis_ $H_0:\beta_1 = 0$ can be rejected. 
+
+### (e)
+
+```{r}
+fit.2 <- lm(y~x2)
+summary(fit.2)
+```
+
+#### _Answer_:
+
+_Null Hypothesis_ $H_0:\beta_2 = 0$ can be rejected. 
+
+### (f)
+
+#### _Answer_: 
+
+No contridiction! Since $x_{2i} = 0.5\times x_{1i} + \epsilon_i$, the are highly correlated. Including both of them is likely to fall into collinearity trap and result in totally wrong result. 
+
+### (g)
+
+```{r}
+x1 <- c(x1, 0.1) 
+x2 <- c(x2, 0.8) 
+y <- c(y, 6)
+data.base <- data.frame(y = y, x1 = x1, x2 = x2)
+rownames(data.base) <- c(1: 101)
+
+fit.lse <- lm(y~x1+x2)
+fit.1   <- lm(y~x1)
+fit.2   <- lm(y~x2)
+fit.lse
+fit.1  
+fit.2  
+```
+
+#### _Answer_: 
+
+this new observation has nearly no effect on regression coefficients for all three models.
+
+```{r}
+library(car)
+outlierTest(fit.lse)
+outlierTest(fit.1)
+outlierTest(fit.2)
+```
+
+the new observation is not an outlier for each model except _fit.lse_. but it is an high leverage point for each of these three models. 
+
+```{r}
+library(ggfortify)
+autoplot(fit.lse)
+autoplot(fit.1)
+autoplot(fit.2)
+```
+
+
+
+
+
