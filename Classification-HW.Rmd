@@ -92,7 +92,7 @@ glm.fits <- glm(Direction~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, data = Wee
 summary(glm.fits)
 ```
 
-Lag1 appears to be statistically significant while other predictors fail to reject null hypothesis. 
+Lag2 appears to be statistically significant while other predictors fail to reject null hypothesis. 
 
 ### (c)
 
