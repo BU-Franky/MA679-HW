@@ -1,0 +1,515 @@
+---
+title: "Classification-HW"
+author: "Franky Zhang"
+date: "2/1/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR2)
+library(tidyverse)
+library(dplyr)
+library(MASS)
+library(e1071)
+library(arm)
+library(formattable)
+library(class)
+library(ggplot2)
+```
+
+
+## 4.6
+
+### (a)
+
+```{r}
+b0 <- -6
+b1 <- 0.05
+b2 <- 1
+hours_studied <- 40
+undergrad_GPA <- 3.5
+percent(invlogit(b0 + b1*hours_studied + b2*undergrad_GPA))
+```
+
+$$Pr(reveiveA) = invlogit(-6 + 0.05\times HoursStudied + 1\times UndergradGPA)$$
+plug hours_studied <- 40 & undergrad_GPA <- 3.5 into algorithm, the prob of this student to get an A is 37.75%. 
+
+### (b)
+
+```{r}
+(logit(0.5) - b0 - b2*undergrad_GPA)/b1
+```
+
+plug $Pr(reveiveA) = 0.5$ into equation, and calculate the hours need to study to have 50% chance of getting an A is 50. 
+
+## 4.8
+
+Although the error rate for 1-nearset neighbors is 18%, it is an average. Assume the training error for this KNN model is $p_1$ and test error is $p_2$, then $0.18 = (p_1 + p_2)/2$. However the training rate for KNN under $K = 1$ is 0, so the test error here is actually 36%, which is higher than logistic regression(30%). Thus, I prefer logistic regression! 
+
+
+
+
+## 4.9
+
+### (a)
+
+```{r}
+odds = 0.37
+percent(odds/(1+odds))
+```
+
+$$ odds = \frac{Pr(Default)}{1-Pr(Default)}$$
+plug $odds = 0.37$ into the equation, and get the fraction of peoplel get default is 27.01%
+
+### (b)
+
+```{r}
+p = 0.16
+percent(p/(1-p))
+```
+
+plug $prob = 0.16$ into the equation, and get the odds equal to 19.05%
+
+\newpage
+
+## 4.13
+
+### (a)
+
+```{r}
+# Weekly
+pairs(Weekly)
+cor(Weekly[, -9]) 
+```
+
+covariance between the lag variables and today's returns are close to zero, which indicates weak collinearity. 
+
+### (b)
+
+```{r}
+glm.fits <- glm(Direction~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, data = Weekly, family = binomial)
+summary(glm.fits)
+```
+
+Lag1 appears to be statistically significant while other predictors fail to reject null hypothesis. 
+
+### (c)
+
+```{r}
+glm.probs <- predict(glm.fits, type = "response")
+glm.pred <- rep("Down", length(glm.probs))
+glm.pred[glm.probs > .5] <- "Up"
+table(glm.pred, Weekly$Direction)
+percent(1 - mean(glm.pred == Weekly$Direction))
+```
+
+the confusion matrix tells me the overall error rate is 43.89% and the model has predict too much "Up" direction which should be "Down" in original data. 
+
+### (d)
+
+```{r}
+train <- (Weekly$Year < 2009)
+Weekly.test <- Weekly[!train, ]
+Direction.test <- Weekly.test$Direction
+glm.fits <- glm(Direction~Lag2, data = Weekly, family = binomial, subset = train)
+glm.probs <- predict(glm.fits, Weekly.test, type = "response")
+glm.pred <- rep("Down", length(glm.probs))
+glm.pred[glm.probs > .5] <- "Up"
+table(glm.pred, Direction.test)
+```
+By GLM model, the overall fraction of correct predictions for held data is $(9+56)/(9+5+34+56)$ = 62.50%
+
+### (e)
+
+```{r}
+lda.fits <- lda(Direction~Lag2, data = Weekly, subset = train)
+lda.pred <- predict(lda.fits, Weekly.test)
+lda.class <- lda.pred$class
+table(lda.class, Direction.test)
+```
+By LDA model, the overall fraction of correct predictions for held data is $(9+56)/(9+5+34+56)$ = 62.50%
+
+### (f)
+
+```{r}
+qda.fits <- qda(Direction~Lag2, data = Weekly, subset = train)
+qda.pred <- predict(qda.fits, Weekly.test)
+qda.class <- qda.pred$class
+table(qda.class, Direction.test)
+```
+By QDA model, the overall fraction of correct predictions for held data is $(61)/(43+61)$ = 58.65%
+
+### (g)
+
+```{r}
+train.X <- cbind(Weekly$Lag2[train])
+test.X <- cbind(Weekly$Lag2[!train])
+Direction <- Weekly$Direction
+Direction.train <- Direction[train]
+set.seed(2)
+knn.pred <- knn(test = test.X, train = train.X, cl = Direction.train, k = 1)
+table(knn.pred,  Direction.test)
+```
+By KNN model(k = 1), the overall fraction of correct predictions for held data is $(21+31)/(21+31+22+30)$ = 50%
+
+### (h)
+
+```{r}
+nb.fits <- naiveBayes(Direction~Lag2, data = Weekly, subset = train)
+nb.class <- predict(nb.fits, Weekly.test)
+table(nb.class,  Direction.test)
+```
+By naive Bayes model, the overall fraction of correct predictions for held data is $(61)/(43+61)$ = 58.65%
+
+### (i)
+
+glm and LDA model provide the best results on this data
+
+### (j)
+
+```{r}
+lda.fits <- lda(Direction~Lag2 + Lag3, data = Weekly, subset = train)
+lda.pred <- predict(lda.fits, Weekly.test)
+lda.class <- lda.pred$class
+table(lda.class, Direction.test)
+
+qda.fits <- qda(Direction~Lag1 + Lag3, data = Weekly, subset = train)
+qda.pred <- predict(qda.fits, Weekly.test)
+qda.class <- qda.pred$class
+table(qda.class, Direction.test)
+
+nb.fits <- naiveBayes(Direction~Lag2 + Lag3, data = Weekly, subset = train)
+nb.class <- predict(nb.fits, Weekly.test)
+table(nb.class,  Direction.test)
+
+knn.pred <- knn(test = test.X, train = train.X, cl = Direction.train, k = 3)
+table(knn.pred,  Direction.test)
+```
+
+_LDA_: when includes Lag2 and Lag3 as predictors, LDA model gives best results, correct prediction for held data is 62.5%.
+
+_QDA_: QDA model give best results (61.5%) including Lag1 and Lag3 as predictors. 
+
+_Naive Bayes_: including Lag2 and Lag3, Naive Bayes gives best prediction results: 58.7%
+
+_KNN_: when k = 3, KNN classification give best result, 
+
+
+## 4.14
+
+### (a)
+
+```{r}
+mpg01 <- rep(1, length(Auto$mpg))
+mpg01[Auto$mpg<median(Auto$mpg)] <- 0
+```
+
+### (b)
+
+```{r}
+names(Auto)
+cylinders <- ggplot(data = Auto, mapping = aes(x = cylinders, y = mpg01)) + 
+  geom_point() + geom_jitter()
+displacement <- ggplot(data = Auto, mapping = aes(x = displacement, y = mpg01)) + 
+  geom_point() 
+horsepower <- ggplot(data = Auto, mapping = aes(x = horsepower, y = mpg01)) + 
+  geom_point() 
+weight <- ggplot(data = Auto, mapping = aes(x = weight, y = mpg01)) + 
+  geom_point() 
+acceleration <- ggplot(data = Auto, mapping = aes(x = acceleration, y = mpg01)) + 
+  geom_point()  # no clear relationship
+year <- ggplot(data = Auto, mapping = aes(x = year, y = mpg01)) + 
+  geom_point() + geom_jitter() # no clear relationship
+origin <- ggplot(data = Auto, mapping = aes(x = origin, y = mpg01)) + 
+  geom_point() + geom_jitter()
+Auto01 <- cbind(mpg01, Auto)
+cor(Auto01[, -10])
+Auto01$mpg01 <- factor(Auto01$mpg01)
+```
+
+cylinders, horsepower, weight, acceleration and origin seems to be useful for predicting _mpg01_
+
+### (c)
+
+```{r}
+# Auto$year
+train <- (Auto01$year < 81)
+Auto01.train <- Auto01[train, ]
+Auto01.test <- Auto01[!train, ]
+mpg01.train <- Auto01.train$mpg01
+mpg01.test <- Auto01.test$mpg01
+```
+
+### (d)
+
+```{r}
+lda.fits <- lda(mpg01~cylinders+displacement+weight, data = Auto01.train)
+lda.pred <- predict(lda.fits, newdata = Auto01.test)
+lda.class <- lda.pred$class
+table(lda.class, mpg01.test)
+1 - percent(51/58)
+
+# lda.pred <- predict(lda.fits, newdata = Auto01.train)
+# lda.class <- lda.pred$class
+# table(lda.class, mpg01.train)
+# (166 + 134)/334
+```
+
+the test error of this LDA model is 12.07%
+
+### (e)
+
+```{r}
+qda.fits <- qda(mpg01~cylinders+displacement+weight, data = Auto01.train)
+qda.pred <- predict(qda.fits, newdata = Auto01.test)
+qda.class <- qda.pred$class
+table(qda.class, mpg01.test)
+1 - percent(52/58)
+
+# qda.pred <- predict(qda.fits, newdata = Auto01.train)
+# qda.class <- qda.pred$class
+# table(qda.class, mpg01.train)
+# (173 + 130)/334
+```
+
+the test error of this QDA model is 10.34%
+
+### (f)
+
+```{r}
+glm.fits <- glm(mpg01~cylinders+displacement+weight, data = Auto01.train, family = binomial)
+glm.probs <- predict(glm.fits, newdata =  Auto01.test, type = "response")
+glm.pred <- rep(1, length(glm.probs))
+glm.pred[glm.probs < .5] <- 0
+table(glm.pred, mpg01.test)
+1 - percent(49/58)
+```
+
+the test error of this GLM model is 15.52%
+
+### (g)
+
+```{r}
+nb.fits <- naiveBayes(mpg01~cylinders+displacement+weight, data = Auto01.train)
+glm.pred <- predict(nb.fits, newdata = Auto01.test)
+table(glm.pred, mpg01.test)
+1 - percent(51/58)
+```
+
+the test error of this naive Bayes model is 12.07%
+
+### (h)
+
+```{r}
+train.X <- cbind(cylinders=Auto$cylinders, 
+                 displacement=Auto$displacement, weight=Auto$weight)[train, ]
+test.X <- cbind(cylinders=Auto$cylinders, 
+                displacement=Auto$displacement, weight=Auto$weight)[!train, ]
+knn.error <- c()
+for (i in 1:100) {
+  # i = 1
+  knn.pred <- knn(train = train.X, test = test.X, cl = mpg01.train, k = i)
+  knn.error <- rbind(knn.error, c(i,percent(1-(table(knn.pred,  mpg01.test)[1,1] + 
+      table(knn.pred,  mpg01.test)[2,2])/58)))
+}
+knn.error <- data.frame(k = knn.error[, 1], error.rate = knn.error[, 2])
+ggplot(data = knn.error, aes(x = k, y = error.rate)) + 
+  geom_smooth(method = 'loess', formula = 'y ~ x', se = FALSE) +
+  xlab("k") + ylab("test error rate")
+```
+when k = 30, KNN model performs best on _Auto_ data, reach a test rate down to 15.51%
+
+\newpage
+
+## 4.15
+
+### (a)
+
+```{r}
+Power <- function(a){
+  print(a^3)
+}
+# Power(2)
+```
+
+### (b)
+
+```{r}
+Power2 <- function(x, a){
+  print(x^a)
+}
+Power2(3, 8)
+```
+
+### (c)
+
+```{r}
+Power2(10, 3)
+Power2(8, 17)
+Power2(131, 3)
+```
+
+### (d)
+
+```{r}
+Power3 <- function(x, a){
+  R <- x^a
+  return(R)
+}
+```
+
+### (e)
+
+```{r}
+x <- c(1:10)
+ggplot(mapping = aes(x = x, y = Power3(x, 2))) + 
+  geom_line() + xlab("x") + ylab("x^2") + 
+  ggtitle("y = x^2")
+  
+ggplot(mapping = aes(x = log(x), y = log(Power3(x, 2)))) + 
+  geom_line() + xlab("log(x)") + ylab("log(x^2)") + 
+  ggtitle("y = x^2 on log scale")
+```
+
+### (f)
+
+```{r}
+PlotPower <- function(vector, power){
+  plot.data <- data.frame(x = vector, y = vector^3)
+  ggplot(data = plot.data, aes(x =x, y = y)) + 
+    geom_line() + xlab("x") + ylab("x^3")
+}
+PlotPower(vector = c(1:10), power = 3)
+```
+
+## 4.16
+
+```{r}
+# Boston
+crim.median <- median(Boston$crim)
+# create response 
+crim01 <- rep(1, length(Boston$crim))
+crim01[Boston$crim<crim.median] <- 0
+Boston01 <- cbind(crim01, Boston)[, -2]
+abs(cor(Boston01)>.5)
+```
+
+according to correlation matrix, pick up _indus_, _nox_, _age_, _rad_ and _tax_ to be condidate predictors for following steps. 
+
+### logistic regression
+
+```{r}
+Boston01$crim01 <- factor(Boston01$crim01)
+glm.fits <- glm(crim01~indus+nox+age+rad+tax, family = binomial, data = Boston01)
+summary(glm.fits)
+```
+
+predictor _nox_, _rad_ and _tax_ successfully reject null hypothesis, then consider fitting model on training set to compare performances. 
+
+```{r}
+dim(Boston)
+set.seed(22)
+sample <- sample(size = round(dim(Boston)[1]*.3), x = dim(Boston)[1], replace = FALSE)
+test <- c(1:(dim(Boston)[1])) %in% sample
+Boston01.train <- Boston01[!test, ]
+crim01.train <- Boston01.train$crim01
+Boston01.test <- Boston01[test, ]
+crim01.test <-  Boston01.test$crim01
+
+glm.fit1 <- glm(crim01~indus+nox+age+rad+tax, family = binomial, data = Boston01.train)
+glm.prob1 <- predict(glm.fit1, newdata = Boston01.test, type = "response")
+glm.pred1 <- rep(1, length(glm.prob1))
+glm.pred1[glm.prob1<.5] <- 0
+
+compare.table <- data.frame(method = "glm_5", 
+  test.error = 1-(table(glm.pred1, crim01.test)[1,1] + 
+  table(glm.pred1, crim01.test)[2,2])/152)
+
+glm.fit2 <- glm(crim01~nox+rad+tax, family = binomial, data = Boston01.train)
+glm.prob2 <- predict(glm.fit2, newdata = Boston01.test, type = "response")
+glm.pred2 <- rep(1, length(glm.prob2))
+glm.pred2[glm.prob2<.5] <- 0
+compare.table <- rbind(compare.table, 
+  c("glm_3", 1-(table(glm.pred2, crim01.test)[1,1] + 
+  table(glm.pred2, crim01.test)[2,2])/152))
+
+
+```
+
+
+### LDA
+
+```{r}
+lda.fit1 <- lda(crim01~indus+nox+age+rad+tax, data = Boston01.train)
+lda.class1 <- predict(lda.fit1, newdata = Boston01.test)$class
+compare.table <- rbind(compare.table, 
+  c("lda_5", 1-(table(lda.class1, crim01.test)[1,1] + 
+  table(lda.class1, crim01.test)[2,2])/152))
+
+lda.fit2 <- lda(crim01~nox+rad+tax, data = Boston01.train)
+lda.class2 <- predict(lda.fit2, newdata = Boston01.test)$class
+compare.table <- rbind(compare.table, 
+  c("lda_3", 1-(table(lda.class2, crim01.test)[1,1] + 
+  table(lda.class2, crim01.test)[2,2])/152))
+```
+
+
+### Naive Bayes
+
+```{r}
+nb.fit1 <- naiveBayes(crim01~indus+nox+age+rad+tax, data = Boston01.train)
+nb.class1 <- predict(nb.fit1, newdata = Boston01.test)
+compare.table <- rbind(compare.table, 
+  c("nb_5", 1-(table(nb.class1, crim01.test)[1,1] + 
+  table(nb.class1, crim01.test)[2,2])/152))
+
+nb.fit2 <- naiveBayes(crim01~nox+rad+tax, data = Boston01.train)
+nb.class2 <- predict(nb.fit2, newdata = Boston01.test)
+compare.table <- rbind(compare.table, 
+  c("nb_3", 1-(table(nb.class2, crim01.test)[1,1] + 
+  table(nb.class2, crim01.test)[2,2])/152))
+```
+
+### KNN
+
+```{r}
+# due to the curse of dimension, we prefer 3 dimension predictors
+train.X <- cbind(nox = Boston01.train$nox, 
+                 rad = Boston01.train$rad, 
+                 tax = Boston01.train$tax)
+test.X <- cbind(nox = Boston01.test$nox, 
+                rad = Boston01.test$rad, 
+                tax = Boston01.test$tax)
+knn.error <- c()
+for (i in 3:20) {
+  knn.pred <- knn(train = train.X, test = test.X, cl = crim01.train, k = i)
+  knn.error <- rbind(knn.error, c(i,percent(1-(table(knn.pred,  crim01.test)[1,1] + 
+      table(knn.pred,  crim01.test)[2,2])/152)))
+}
+knn.error <- data.frame(k = knn.error[, 1], error.rate = knn.error[, 2])
+ggplot(data = knn.error, aes(x = k, y = error.rate)) + 
+  geom_smooth(method = 'loess', formula = 'y ~ x', se = FALSE) +
+  xlab("k") + ylab("test error rate")
+compare.table <- rbind(compare.table, c("knn(k=5)", 0.05263158))
+compare.table$test.error <- percent(compare.table$test.error, digit = 3)
+```
+### Conclusion
+
+```{r}
+compare.table
+```
+
+The result shows that, for glm, lda and naive bayes methods, including 3 statistically significant predictors only gives better results. Overrall, knn performs the bset among these methods with an test error rate around 5%. 
+
+
+
+
+
+
+
+
+
+
+
+
