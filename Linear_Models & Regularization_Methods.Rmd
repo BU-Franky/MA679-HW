@@ -1,0 +1,509 @@
+---
+title: "Linear Models and Regularization Methods"
+author: "Franky Zhang"
+date: "2/7/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaps)
+library(base)
+library(stats)
+library(ISLR2)
+library(glmnet)
+library(magrittr)
+library(tidyverse)
+library(generics)
+library(caret)
+library(pls)
+library(ggplot2)
+library(boot)
+```
+
+## 6.2
+
+For parts (a) through (c), indicate which of i. through iv. is correct. Justify your answer.
+
+### (a) 
+
+The lasso, relative to least squares, is:
+
+i. More flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.
+ii. More flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.
+iii. Less flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance.
+iv. Less flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias.
+
+_Answer_:
+
+(iii) is right. Lasso regression add penalty term which results to reduction of predictors' parameters even down to zero. And this causes the decrease of flexibility and variance. However, due to the bias-variance trade-off, the bias increases. 
+
+### (b) Repeat (a) for ridge regression relative to least squares.
+
+_Answer_:
+
+Ridge regression is similar to Lasso, thus choose (iii). the only difference is Ridge regression will not result in remove any predictors. 
+
+### (c) Repeat (a) for non-linear methods relative to least squares.
+
+_Answer_: 
+
+choose (ii), while non-linear regression allows quadratic terms, cubic terms and so on, its flexibility raises and bias decreases. .
+
+\newpage
+
+## 6.9
+
+### (a)
+
+```{r error=FALSE, message=FALSE}
+# College
+set.seed(2)
+full_set <- College
+full_set$Private <- as.numeric(full_set$Private)
+# data centering and scaling 
+for (i in 1:dim(full_set)[2]) {
+  full_set[, i] <- scale(full_set[, i], center = TRUE, scale = TRUE)
+}
+train <- sample(c(TRUE, FALSE), nrow(College), replace = TRUE, prob = c(.8, .2))
+training_set <- full_set[train, ]
+test_set <- full_set[!train, ]
+```
+
+### (b)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+lm.fit <- lm(Apps~., training_set)
+# summary(lm.fit)
+pred.lm.fit <- predict(lm.fit, newdata = test_set, type = "response")
+compare.table <- data.frame(actul = test_set$Apps, lm.fit = pred.lm.fit)
+test.error.lm <- mean((compare.table$actul - compare.table$lm.fit)^2)
+test.error.lm
+```
+
+test error of linear regression is _0.056_. 
+
+### (c)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+# consider 5-fold cross validation 
+x <- model.matrix(Apps~., College)[, -1]
+y <- full_set$Apps
+k <- 5
+n <- nrow(full_set)
+grid <- 10^seq(3, -3, length = 20)
+folds <- sample(rep(1:k, length = n))
+# table(folds)
+cv.errors.ridge <- data.frame()
+for (i in 1:length(grid)) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- glmnet(x[folds != j, ], y[folds != j], alpha = 0, lambda = grid[i])
+    pred <- predict(model, newx = x[folds == j, ], type = "response")
+    cv.errors.ridge[i, j] <- mean((y[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+
+colnames(cv.errors.ridge) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.ridge) <-paste("lambda =",  round(grid, digits = 4), seq = "") 
+mean.cv.error.ridge <- cv.errors.ridge %>% apply(1, mean)
+plot(mean.cv.error.ridge, type = "b")
+mean.cv.error.ridge[which.min(mean.cv.error.ridge)]
+```
+the mean test error of Ridge regression is _0.084_.
+
+\newpage
+
+### (d)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+cv.errors.lasso <- data.frame()
+for (i in 1:length(grid)) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- glmnet(x[folds != j, ], y[folds != j], alpha = 1, lambda = grid[i])
+    pred <- predict(model, newx = x[folds == j, ], type = "response")
+    cv.errors.lasso[i, j] <- mean((y[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+
+colnames(cv.errors.lasso) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.lasso) <-paste("lambda =",  round(grid, digits = 4), seq = "") 
+mean.cv.error.lasso <- cv.errors.lasso %>% apply(1, mean)
+plot(mean.cv.error.lasso, type = "b")
+mean.cv.error.lasso[which.min(mean.cv.error.lasso)]
+```
+
+the mean test error of Lasso regression is _0.084_.
+
+### (e)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+cv.errors.pcr <- data.frame()
+for (i in 1:(dim(full_set)[2] - 1)) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- pcr(Apps~.,data = full_set[folds != j, ], validation = "CV")
+    pred <- predict(model, newdata = full_set[folds == j, ], type = "response", ncomp = i)
+    cv.errors.pcr[i, j] <- mean((full_set$Apps[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+colnames(cv.errors.pcr) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.pcr) <-paste("ncomp",  
+                                 round(1:(dim(full_set)[2] - 1), digits = 0), seq = "") 
+mean.cv.error.pcr <- cv.errors.pcr %>% apply(1, mean)
+plot(mean.cv.error.pcr, type = "b")
+mean.cv.error.pcr
+```
+
+### (f)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+cv.errors.plsr <- data.frame()
+for (i in 1:(dim(full_set)[2] - 1)) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- plsr(Apps~.,data = full_set[folds != j, ], validation = "CV")
+    pred <- predict(model, newdata = full_set[folds == j, ], type = "response", ncomp = i)
+    cv.errors.plsr[i, j] <- mean((full_set$Apps[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+colnames(cv.errors.plsr) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.plsr) <-paste("ncomp",  
+                                 round(1:(dim(full_set)[2] - 1), digits = 0), seq = "") 
+mean.cv.error.plsr <- cv.errors.pcr %>% apply(1, mean)
+plot(mean.cv.error.plsr, type = "b")
+mean.cv.error.plsr
+```
+
+### (g)
+
+the test error rate is between 0.05 ~ 0.08 on scaled data. There's not much difference between these approaches. 
+
+\newpage
+
+## 6.10
+
+### (a)
+
+```{r error=FALSE, message=FALSE}
+set.seed(2007)
+df <- data.frame(replicate(20, rnorm(n = 1000)))
+# select some of variables exactly equal to 0, let the rate to be .4
+set.seed(6212)
+index <- sample(c(TRUE, FALSE), dim(df)[2], replace = TRUE, prob = c(.6, .4))
+# sum(index)
+# select 13 variables
+beta <- rep(NA, dim(df)[2])
+beta[!index] <- 0
+beta[index] <- replicate(sum(index), rnorm(1, mean = rbinom(1, 1, prob = .5)))
+# beta
+epsilon <- rnorm(n = 1000, mean = 0, sd <- .2)
+y <- rep(0, 1000)
+for (i in 1:1000) {
+  for (j in 1:20) {
+    y[i] <- df[i, j]*beta[j] + y[i]
+  }
+}
+# add white noises
+y <- y + epsilon
+```
+
+### (b)
+
+```{r error=FALSE, message=FALSE}
+train <- sample(c(1: 1000), 900, replace = FALSE)
+y_train <- y[train]
+x_train <- df[train, ]
+y_test <- y[-train]
+x_test <- df[-train, ]
+
+training <- cbind(y = y_train, x_train)
+test <- cbind(y = y_test, x_test)
+```
+
+### (c)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+bestset.full <- regsubsets(y~., data = training, nvmax = 20)
+# summary(bestset.full)
+train.mat <- model.matrix(y~., data = training)
+training.MSE <- c()
+for(i in 1:20){
+  # i = 1
+  coefi <- coef(bestset.full, id = i)
+  pred <- train.mat[, names(coefi)] %*% coefi
+  training.MSE[i] <- mean((y_train - pred)^2)
+}
+rm(coefi); rm(pred)
+plot(training.MSE, type = "b")
+which.min(training.MSE)
+```
+
+### (d)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+test.mat <- model.matrix(y~., data = test)
+test.MSE <- c()
+for(i in 1:20){
+  # i = 1
+  coefi <- coef(bestset.full, id = i)
+  pred <- test.mat[, names(coefi)] %*% coefi
+  test.MSE[i] <- mean((y_test - pred)^2)
+}
+rm(coefi); rm(pred)
+plot(test.MSE, type = "b")
+which.min(test.MSE)
+```
+
+### (e)
+
+_Answer_: 
+
+When the number of varibles equals to 13, the test MSE reaches it minimum, which illustrate that including all predictors performs worse on test data. 
+
+### (f)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+coef_13 <- coef(bestset.full, id = 13)
+coef_13 <- data.frame(var.names = names(coef_13), Estimation_13 = coef_13)
+rw.name <- c("(Intercept)", paste0("X", c(1: 20)))
+compare <- data.frame(var.names = rw.name, actual = c(0, beta))
+compare <- left_join(compare, coef_13, by = "var.names")
+compare
+```
+
+_Answer_: 
+
+The result is exactly constant with the true model generating data. 
+
+### (g)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+compare <- compare %>% dplyr::select(var.names, actual)
+for (i in 1:20) {
+  # i = 1
+  coef <- coef(bestset.full, id = i)
+  name <- paste("Estimation", i, seq = "")
+  coef_data <-  data.frame(var.names = names(coef), coef)
+  colnames(coef_data)[2] <- name
+  compare <- left_join(compare, coef_data, by = "var.names")
+  rm(name); rm(coef_data); rm(coef)
+}
+compare[is.na(compare)] <- 0
+beta.error <- c()
+for (i in 1:20) {
+  # i = 1
+  name <- paste("Estimation", i, seq = "")
+  temp <- compare %>% select(actual, name)
+  beta.error[i] <- sqrt(sum((temp[1] - temp[2])^2))
+  rm(name, temp)
+}
+plot(beta.error, type = "b")
+which.min(beta.error)
+```
+
+_Answer_: 
+
+This beta error plot is constant with test MSE. 
+
+\newpage
+
+## 6.11
+
+### (a)
+
+_Baseline: linear regression_
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+full_Boston <- Boston
+# centering and scaling
+for (i in 1:dim(full_Boston)[2]) {
+  full_Boston[, i] <- scale(full_Boston[, i], center = TRUE, scale = TRUE)
+}
+
+train <- sample(c(TRUE, FALSE), nrow(full_Boston), replace = TRUE, prob = c(.8, .2))
+train_Boston <- full_Boston[train, ]
+test_Boston <- full_Boston[!train, ]
+
+Boston.lm <- lm(crim~., data = train_Boston)
+pred.lm <- predict(Boston.lm, newdata = test_Boston)
+lm.MSE <- mean((pred.lm - test_Boston$crim)^2)
+```
+
+_best subset selection(Cross Validation) + linear regression_
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+k <- 5
+n <- nrow(full_Boston)
+num.var <- ncol(full_Boston) - 1
+set.seed(2145)
+folds <- sample(rep(1:k, length = nrow(full_Boston)))
+# table(folds)
+cv.errors <- matrix(NA, nrow = k, ncol = num.var, dimnames = list(NULL, paste(1:num.var)))
+for(j in 1:k){
+  best.fit <- regsubsets(crim~., data = full_Boston[folds != j, ], nvmax = num.var)
+  test.mat <- model.matrix(crim~., data = full_Boston[folds == j, ])
+  for (i in 1:num.var) {
+    coefi <- coef(best.fit, id = i)
+    pred <- test.mat[, names(coefi)] %*% coefi
+    cv.errors[j, i] <- mean((pred - full_Boston$crim[folds == j])^2)
+  }
+}
+mean.cv.errors <- apply(cv.errors, 2, mean)
+# which.min(mean.cv.errors)
+plot(mean.cv.errors, type = "b")
+
+# choose 8 predictors
+best.fit <-regsubsets(crim~., data = train_Boston, nvmax = 8)
+test.mat <- model.matrix(crim~., data = test_Boston)
+coefi <- coef(best.fit, id = 8)
+pred <- test.mat[, names(coefi)] %*% coefi
+best.subset.MSE <- mean((pred - test_Boston$crim)^2)
+```
+
+_Ridge regression (Cross Validation)_
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+x <- model.matrix(crim~., full_Boston)[, -1]
+y <- full_Boston$crim
+grid <- 10^seq(3, -3, length = 30)
+# table(folds)
+cv.errors.ridge <- data.frame()
+for (i in 1:length(grid)) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- glmnet(x[folds != j, ], y[folds != j], alpha = 0, lambda = grid[i])
+    pred <- predict(model, newx = x[folds == j, ], type = "response")
+    cv.errors.ridge[i, j] <- mean((y[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+colnames(cv.errors.ridge) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.ridge) <-paste("lambda =",  round(grid, digits = 4), seq = "") 
+mean.cv.error.ridge <- cv.errors.ridge %>% apply(1, mean)
+plot(mean.cv.error.ridge, type = "b")
+# mean.cv.error.ridge[which.min(mean.cv.error.ridge)]
+# select lambda =  0.591
+Boston.ridge <- glmnet(x[train, ], y[train], alpha = 0, lambda = 0.591)
+pred.ridge <- predict(Boston.ridge, newx = test.mat[, -1])
+ridge.MSE <- mean((pred.ridge - test_Boston$crim)^2)
+```
+
+\newpage
+
+_PCR (Cross Validation)_
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+cv.errors.pcr <- data.frame()
+for (i in 1:num.var) {
+  for (j in 1:k) {
+    # i = 1
+    # j = 1
+    model <- pcr(crim~.,data = full_Boston[folds != j, ], validation = "CV")
+    pred <- predict(model, newdata = full_Boston[folds == j, ], type = "response", ncomp = i)
+    cv.errors.pcr[i, j] <- mean((full_Boston$crim[folds == j] - pred)^2)
+    rm(model); rm(pred)
+  }
+}
+colnames(cv.errors.pcr) <- paste("fold", c(1:k), seq = "")
+row.names(cv.errors.pcr) <-paste("ncomp",  
+                                 round(1:num.var, digits = 0), seq = "") 
+mean.cv.error.pcr <- cv.errors.pcr %>% apply(1, mean)
+plot(mean.cv.error.pcr, type = "b")
+```
+_Discussion_: 
+
+the test MSE for simple linear regression is 1.12, which acts as the baseline. The preferred number of best subset selection is 8, and the best model composed by 8 variable gives a test MSE = 1.05, slightly better than our baseline(1.12). Then, the Ridge regression performs best when $\lambda = 0.591$ and the best model offered by this model has test MSE = 1.24. Eventally, PCR prefer the model with 12 predictors, which is exactly the same as simple linear regression. 
+
+### (b)
+
+_Answer_: Prefer Best Subset Selection. 
+
+### (c)
+
+_Answer_: I won't chose model involve all of the features in the data set. Since Best Subset Selection tells me that the model with 8 predictors performs better on test data and the fewer number of predictors means better and easier to interpret. Additionally, it is obvious that the robustness of model with fewer predictors is better. In all, I prefer the model with 8 predictors. 
+
+
+## 5.8
+
+### (a)
+
+```{r}
+set.seed(1)
+x <- rnorm(100)
+y <- x - 2 * x^2 + rnorm(100)
+```
+
+_Answer_: 
+
+n = 100, p = 1, the equation is as followed: 
+$$y_i = x_i - 2 \times x_i^2 + \epsilon_i$$
+
+### (b)
+
+```{r error=FALSE,echo=FALSE, message=FALSE}
+ggplot(mapping = aes(x = x, y = y)) + 
+  geom_point()
+```
+
+_Comment_: 
+
+Y has strong relationship with quadratic form of X. 
+
+### (c)
+
+```{r}
+data <- data.frame(x, y)
+set.seed(2247)
+fit.1 <- glm(y ~ x, data = data)
+cv.glm(data, fit.1)$delta[1]
+
+fit.2 <- glm(y ~ poly(x, 2), data = data)
+cv.glm(data, fit.2)$delta[1]
+
+fit.3 <- glm(y ~ poly(x, 3), data = data)
+cv.glm(data, fit.3)$delta[1]
+
+
+fit.4 <- glm(y ~ poly(x, 4), data = data)
+cv.glm(data, fit.4)$delta[1]
+```
+
+### (d)
+
+_Answer_: 
+
+the result must be the same because whatever the order, LOOCV calculate n times where each observation acts as the validation and take its mean. this process is not affected by the order or the randomm seed. 
+
+### (e)
+
+_Answer_: 
+
+model (ii) has the smallest LOOCV error, it is exactly what we expected. This due to the way of data generation. 
+
+### (f)
+
+_Answer_: 
+
+```{r}
+summary(fit.1)
+summary(fit.2)
+summary(fit.3)
+summary(fit.4)
+```
+
+_Comment_: 
+
+whatever the number of polynomials, only x and qudratic x show statistial significance, which indicates that it it better to include only these two terms. this agrees the conclusion draws from LOOCV! 
+
+
