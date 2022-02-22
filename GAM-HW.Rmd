@@ -1,0 +1,412 @@
+---
+title: "GAM-HW"
+author: "Franky Zhang"
+date: "2/14/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ISLR2)
+attach(Wage)
+library(ggplot2)
+library(splines)
+library(gam)
+library(akima)
+library(leaps)
+library(magrittr)
+library(dplyr)
+library(caret)
+```
+
+## 7.3
+
+Suppose we fit a curve with basis functions $b_1(X) = X$, $b_2(X) = (X-1)^2 I(X \geq 1)$. We fit linear regression model 
+$$Y = \beta_0 + \beta_1 b_1 (X) + \beta_2 b_2(X) + \epsilon$$
+and obtain coefficient estimates $\hat{\beta_0} = 1$, $\hat{\beta_1} = 1$, $\hat{\beta_2} = 3$. Sketch the estimated curve between $X = -2$ and $X = 2$. Note this intercepts, slopes and other relevant information. 
+
+#### _Answer_
+we can obtain piecewise regression line with the following function: 
+$$ Y = \left\{
+\begin{array}{rcl}
+1 + X                  &      & {-2 \leq X < 1  }\\
+1 + X - 2(X - 1)^2     &      & {1 \leq X \leq 2}
+\end{array} \right. $$
+
+```{r, fig.height=3, fig.width=6}
+X_1 <- seq(from = -2, to = 1, by = .01); Y_1 <- X_1 + 1
+X_2 <- seq(from =  1, to = 2, by = .01); Y_2 <- X_2 + 1 - 2 * (X_2 - 1) * (X_2 - 1)
+X <- c(X_1, X_2); Y <- c(Y_1, Y_2); rm(X_1, X_2, Y_1, Y_2)
+ggplot() + 
+  geom_line(mapping = aes(x = X, y = Y))
+rm(X, Y)
+```
+
+\newpage
+
+## 7.9
+
+### (a)
+
+```{r, fig.height=4, fig.width=6}
+fit.1 <-lm(nox ~ poly(dis, 3), data = Boston)
+summary(fit.1)$coef
+pred.1 <- predict(fit.1, newdata = Boston)
+plot.data1 <- data.frame(dis  = Boston$dis, 
+                         nox  = Boston$nox, 
+                         pred = pred.1)
+ggplot(data = plot.data1) + 
+  geom_point(aes(x = dis, y = nox), alpha = .5) + 
+  geom_line(aes(x = dis, y = pred), color = "blue", lwd = .6)
+```
+
+### (b)
+
+```{r, fig.height=4, fig.width=6}
+pred.compare <- data.frame(actual = Boston$nox)
+for (i in 1:10) {
+  fit <- lm(nox ~ poly(dis, i), data = Boston)
+  name <- paste("power", seq = "=", i)
+  pred <- predict(fit, newdata = Boston)
+  pred.compare <- cbind(pred.compare, pred)
+  colnames(pred.compare)[i+1] <- name
+  rm(fit, name, pred)
+}
+mse.compare <- c()
+for (i in 1:10) {
+  MSE <- sum((pred.compare$actual - pred.compare[, i+1])^2) / length(Boston$nox)
+  mse.compare[i] <- MSE
+  rm(MSE)
+}
+plot(mse.compare, type = "b")
+```
+
+_Answer_: 
+
+The MSE continue to decrease as the increase of power. 
+
+### (c)
+
+```{r, fig.height=4, fig.width=6}
+# perform cross-validation
+k <- 10
+set.seed(1147)
+folds <- sample(rep(1:k, length = length(Boston$nox)))
+# table(folds)
+data <- data.frame(nox = Boston$nox, dis = Boston$dis, folds = folds)
+cv.errors <- data.frame()
+for (j in 1:k) {
+  train_data <- data[folds != j, ]
+  test_data  <- data[folds == j, ]
+  for (i in 1:10) {
+    fit <- lm(nox ~ poly(dis, i), data = train_data)
+    col.name <- paste("power", seq = "=", i)
+    row.name <- paste("fold" , seq = "=", j)
+    pred  <- predict(fit, newdata = test_data)
+    MSE <- (sum((test_data$nox - pred)^2))/length(test_data$nox)
+    cv.errors[j, i] <- MSE
+    colnames(cv.errors)[i] <- col.name
+    rownames(cv.errors)[j] <- row.name
+    rm(fit, col.name, row.name, pred, MSE)
+  }
+  rm(train_data, test_data)
+}
+test_MSE <- apply(cv.errors, 2, mean)
+plot(test_MSE, type = "b")
+which.min(apply(cv.errors, 2, mean))
+```
+
+_Answer_: 
+
+As to my consideration, the optimal power for the polynomial regression is 3. According to the plot, when power = 3, the test error reached the minimum. 
+
+### (d)
+
+```{r, warning=FALSE, fig.height=4, fig.width=6}
+# fit a regression spline line
+cv.errors <- data.frame()
+for (j in 1:k) {
+  train_data <- data[folds != j, ]
+  test_data  <- data[folds == j, ]
+  for (i in 1:10) {
+    fit <- lm(nox ~ bs(dis, knots = i, df = 4), data = data)
+    col.name <- paste("knots", seq = "=", i)
+    row.name <- paste("fold" , seq = "=", j)
+    pred  <- predict(fit, newdata = test_data)
+    MSE <- (sum((test_data$nox - pred)^2))/length(test_data$nox)
+    cv.errors[j, i] <- MSE
+    colnames(cv.errors)[i] <- col.name
+    rownames(cv.errors)[j] <- row.name
+    rm(fit, col.name, row.name, pred, MSE)
+  }
+  rm(train_data, test_data)
+}
+test_MSE <- apply(cv.errors, 2, mean)
+plot(test_MSE, type = "b")
+```
+
+_Answer_: 
+
+Utilize cross validation to find that the optimal number of knots is 2
+
+### (e)
+
+```{r, warning=FALSE, fig.height=4, fig.width=6}
+# fit a regression spline line
+rss <- c()
+for (j in 1:k) {
+  train_data <- data[folds != j, ]
+  test_data  <- data[folds == j, ]
+  for (i in 1:20) {
+    fit <- lm(nox ~ bs(dis, df = i), data = data)
+    rss[i] <- sum((fit$residuals)^2)
+  }
+  rm(train_data, test_data)
+}
+plot(rss, type = "b")
+```
+
+### (f)
+
+```{r, warning=FALSE, fig.height=4, fig.width=6}
+k <- 10
+set.seed(1518)
+folds <- sample(rep(1:k, length = length(Boston$nox)))
+# table(folds)
+data <- data.frame(nox = Boston$nox, dis = Boston$dis, folds = folds)
+cv.errors <- data.frame()
+for (j in 1:k) {
+  train_data <- data[folds != j, ]
+  test_data  <- data[folds == j, ]
+  for (i in 1:15) {
+    fit <- lm(nox ~ bs(dis, df = i), data = train_data)
+    col.name <- paste("df", seq = "=", i)
+    row.name <- paste("fold" , seq = "=", j)
+    pred  <- predict(fit, newdata = test_data)
+    MSE <- (sum((test_data$nox - pred)^2))/length(test_data$nox)
+    cv.errors[j, i] <- MSE
+    colnames(cv.errors)[i] <- col.name
+    rownames(cv.errors)[j] <- row.name
+    rm(fit, col.name, row.name, pred, MSE)
+  }
+  rm(train_data, test_data)
+}
+test_MSE <- apply(cv.errors, 2, mean)
+plot(test_MSE, type = "b")
+rm(test_MSE, fit.1, pred.1, cv.errors, fit.bs, 
+   plot.data1, data, pred.compare, 
+   i, j, k, folds, mse.compare, rss)
+```
+
+_Answer_: 
+
+I use cross validation to find the optimal freedom of degree is 8. 
+
+\newpage
+
+## 7.10
+
+### (a)
+
+```{r, fig.height=5, fig.width=8}
+set.seed(1543)
+train <- sample(c(TRUE, FALSE), dim(College)[1], replace = TRUE, prob = c(.8, .2))
+training <- College[train, ]
+test <- College[!train, ]
+fit.forward <- regsubsets(Outstate~., data = training, nvmax = 17, method = "forward")
+fit.summary <- summary(fit.forward)
+test.mat <- model.matrix(Outstate~., data = test)
+test.rmse <- c()
+bic <- fit.summary$bic; AdjR2 <- fit.summary$adjr2; Cp <- fit.summary$cp
+for (i in 1:17) {
+  coefi <- coef(fit.forward, id = i)
+  pred <- test.mat[, names(coefi)] %*% coefi
+  test.rmse[i] <- sqrt(sum((pred - test$Outstate)^2) / length(test$Outstate))
+  rm(coefi, pred)
+}
+par(mfrow = c(2, 2))
+plot(test.rmse, type = "b")
+plot(bic, type = "b")
+plot(AdjR2, type = "b")
+plot(Cp, type = "b")
+```
+_Answer_: 
+
+According to the aforementioned plot, I finally choose five predictor to continue the following study. The reason is that test MSE decreased rapidly before #predictors $\leq$ 5. As the number keeped increasing, there was no clear evidence showing that more complex model is better. Therefore, 5 is the optimal number to keep the balance of prediciton accuracy and model interpretability. 
+
+### (b)
+
+```{r, echo = FALSE, fig.height=4, fig.width=8}
+# names(coef(fit.forward, id = 5))
+data <- College %>% select(Outstate, Private, Room.Board, PhD, perc.alumni, Expend)
+fit.1 <- gam(Outstate ~ Private + s(Room.Board, 1) + PhD + perc.alumni 
+             + Expend, data = data)
+fit.2 <- gam(Outstate ~ Private + s(Room.Board, 2) + PhD + perc.alumni 
+             + Expend, data = data)
+fit.3 <- gam(Outstate ~ Private + s(Room.Board, 3) + PhD + perc.alumni 
+             + Expend, data = data)
+fit.4 <- gam(Outstate ~ Private + s(Room.Board, 4) + PhD + perc.alumni 
+             + Expend, data = data)
+fit.5 <- gam(Outstate ~ Private + s(Room.Board, 5) + PhD + perc.alumni 
+             + Expend, data = data)
+fit.6 <- gam(Outstate ~ Private + s(Room.Board, 6) + PhD + perc.alumni 
+             + Expend, data = data)
+anova(fit.1,fit.2,fit.3,fit.4,fit.5,fit.6)
+fit.2.1 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 1) + perc.alumni 
+               + Expend, data = data)
+fit.2.2 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 2) + perc.alumni 
+               + Expend, data = data)
+fit.2.3 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+               + Expend, data = data)
+fit.2.4 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 4) + perc.alumni 
+               + Expend, data = data)
+fit.2.5 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 5) + perc.alumni 
+               + Expend, data = data)
+fit.2.6 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 6) + perc.alumni 
+               + Expend, data = data)
+anova(fit.2.1,fit.2.2,fit.2.3,fit.2.4,fit.2.5,fit.2.6)
+# fit.2.3.1 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,1) + Expend, data = data)
+# fit.2.3.2 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,2) + Expend, data = data)
+# fit.2.3.3 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,3) + Expend, data = data)
+# fit.2.3.4 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,4) + Expend, data = data)
+# fit.2.3.5 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,5) + Expend, data = data)
+# fit.2.3.6 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) 
+#              + s(perc.alumni,6) + Expend, data = data)
+# anova(fit.2.3.1,fit.2.3.2,fit.2.3.3,fit.2.3.4,fit.2.3.5,fit.2.3.6)
+fit.2.3.1 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 1), data = data)
+fit.2.3.2 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 2), data = data)
+fit.2.3.3 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 3), data = data)
+fit.2.3.4 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 4), data = data)
+fit.2.3.5 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 5), data = data)
+fit.2.3.6 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+                 + s(Expend, 6), data = data)
+anova(fit.2.3.1,fit.2.3.2,fit.2.3.3,fit.2.3.4,fit.2.3.5,fit.2.3.6)
+fit.gam <- fit.2.3.5
+ggplot() + 
+  geom_point(mapping = aes(x = fit.gam$fitted.values, y = fit.gam$residuals, 
+                           alpha = abs(fit.gam$residuals)),
+             color = "blue3") + 
+  geom_hline(yintercept = 0, size = 1, lty = 2, alpha = 0.5) + 
+  theme(legend.position="none")
+```
+_Answer_: 
+The final model I choose is 'fit.2.3.5 <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni + s(Expend, 5), data = data)' via analysis of covariance. 
+
+### (c)
+
+```{r}
+fit.gam <- gam(Outstate ~ Private + s(Room.Board, 2) + s(PhD, 3) + perc.alumni 
+               + s(Expend, 5), data = data[train, ])
+postResample(predict(fit.gam, data[!train, ]), data[!train, ]$Outstate)
+```
+
+### (d)
+
+```{r}
+fit.lm <- lm(Outstate~., data = data[train, ])
+postResample(predict(fit.lm, data[!train, ]), data[!train, ]$Outstate)
+postResample(predict(fit.gam, data[!train, ]), data[!train, ]$Outstate)
+```
+
+
+## 7.11
+
+### (a)
+
+```{r}
+set.seed(1044)
+Y  <- rnorm(100, mean = 10)
+X1 <- rnorm(100, mean = 8)
+X2 <- rnorm(100, mean = 6)
+```
+
+### (b)
+
+```{r}
+set.seed(1047)
+beta1 <- rnorm(n = 1, mean = 3, sd = 1)
+```
+
+### (c)
+
+```{r}
+a <- Y - beta1 * X1
+beta2 <- lm(a ~ X2)$coef[2]
+```
+
+### (d)
+
+```{r}
+a <- Y - beta2 * X2
+beta1 <- lm(a ~ X1)$coef[2]
+```
+
+### (e)
+
+```{r, fig.height=4, fig.width=6}
+set.seed(1044)
+Y  <- rnorm(100)
+X1 <- rnorm(100)
+X2 <- rnorm(100)
+set.seed(1053)
+beta1 <- rnorm(n = 1, mean = 0, sd = 1)
+# for loop
+record <- data.frame()
+for (i in 1:10) {
+  a <- Y - beta1 * X1
+  beta2 <- lm(a ~ X2)$coef[2]
+  a <- Y - beta2 * X2
+  beta1 <- lm(a ~ X1)$coef[2]
+  beta0 <- lm(a ~ X1)$coef[1]
+  # print(beta0)
+  # print(beta1)
+  # print(beta2)
+  record <- rbind(record, c(beta0, beta1, beta2))
+}
+colnames(record) <- c("beta0", "beta1", "beta2")
+ggplot(data = record) + 
+  geom_line(aes(c(1:10), beta0), color = "black", lwd = .5) + 
+  geom_line(aes(c(1:10), beta1), color = "blue", lwd = .5) + 
+  geom_line(aes(c(1:10), beta2), color = "red", lwd = .5)
+```
+
+### (f)
+
+```{r, fig.height=4, fig.width=6}
+fit.multi <- lm(Y~X1+X2)
+ggplot(data = record) + 
+  geom_line(aes(c(1:10), beta0), color = "black", lwd = .5) + 
+  geom_hline(yintercept = fit.multi$coefficients[1], color = "black", 
+             linetype = 2, lwd = 1, alpha = .5) + 
+  geom_line(aes(c(1:10), beta1), color = "blue", lwd = .5) + 
+  geom_hline(yintercept = fit.multi$coefficients[2], color = "blue", 
+             linetype = 2, lwd = 1, alpha = .5) + 
+  geom_line(aes(c(1:10), beta2), color = "red", lwd = .5) + 
+  geom_hline(yintercept = fit.multi$coefficients[3], color = "red", 
+             linetype = 2, lwd = 1, alpha = .5)
+```
+
+### (g)
+
+_Answer_: 
+
+under this case, 3 is a good interation number. 
+
+
+
+
+
+
+
+
+
